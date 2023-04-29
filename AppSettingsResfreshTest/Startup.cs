@@ -1,4 +1,5 @@
 using AppSettingsResfreshTest.Models;
+using AppSettingsResfreshTest.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -22,12 +23,44 @@ namespace AppSettingsResfreshTest
         {
             services.AddDbContext<SampleDB>(options => options.UseSqlServer(Configuration.GetConnectionString("SampleDB")));
 
-            services.AddControllersWithViews();
-           
             services.Configure<WebConfig>(Configuration.GetSection("WebConfig"));
             services.AddAuthentication();
             services.AddSession();
             services.AddHealthChecks();//.AddCheck().AddDbContextCheck<SampleDB>();
+
+            services.AddControllersWithViews(options =>
+            {
+                options.Filters.Add(new GlobalSettingsFilter()
+                {
+                    Url = Configuration.GetSection("WebConfig")["StaticProperty"],
+                });
+                options.AllowEmptyInputInBodyModelBinding = true;
+            });
+
+            services.AddScoped<IConstructorSetupSerivce, ConstructorSetupSerivce>(_ =>
+            new ConstructorSetupSerivce()
+            {
+                Url = Configuration.GetSection("WebConfig")["StaticProperty"]
+            });
+
+            services.AddScoped<IEmailService, EmailService>(_ =>
+            {
+                ResourceTemplatePath templatePath = new ResourceTemplatePath();
+                SMTPServer server = new SMTPServer();
+                EmailSettings settings = new EmailSettings() 
+                {
+                    Url = Configuration.GetSection("WebConfig")["StaticProperty"]
+                };
+
+                return new EmailService(templatePath, settings, server);
+            });
+
+            services.AddSingleton(_ =>
+            {
+                LogServerAgent log = new LogServerAgent();
+                log.InitializeLogServerAgent(Configuration.GetSection("WebConfig")["StaticProperty"]);
+                return log;
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
